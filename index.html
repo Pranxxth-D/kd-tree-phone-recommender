@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<form method="GET" action="{{ url_for('index') }}" id="search-form">
+    <div class="row">
+
+        {% if selected_phone %}
+        <aside class="col-lg-3">
+            <div class="sidebar">
+                <h5 class="mb-3">Filters</h5>
+                
+                {% set numeric_features = [
+                    ("Cost", "₹"), ("RAM", "GB"), ("Storage", "GB"), 
+                    ("Battery_mAh", "mAh"), ("Charging_W", "W"), ("Rear_MP", "MP"), 
+                    ("Front_MP", "MP"), ("Display_in", "in")
+                ] %}
+                
+                {% for feat, unit in numeric_features %}
+                <div class="mb-3">
+                    <label class="form-label small">{{ feat.replace('_', ' ').title() }} ({{ unit }})</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" name="{{ feat.lower() }}_min" placeholder="Min" aria-label="Min" value="{{ request.args.get(feat.lower() + '_min', '') }}">
+                        <span class="input-group-text">-</span>
+                        <input type="text" class="form-control" name="{{ feat.lower() }}_max" placeholder="Max" aria-label="Max" value="{{ request.args.get(feat.lower() + '_max', '') }}">
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="mb-3">
+                    <label for="brand_filter" class="form-label small">Brand (e.g., Samsung, Xiaomi)</label>
+                    <input type="text" class="form-control form-control-sm" id="brand_filter" name="brand_filter" placeholder="Comma-separated brands" value="{{ request.args.get('brand_filter', '') }}">
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-100 mt-2">Apply Filters & Search</button>
+            </div>
+        </aside>
+        {% endif %}
+
+        <main class="{% if selected_phone %}col-lg-9{% else %}col-lg-8 offset-lg-2{% endif %}">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Search for a Phone</h5>
+                </div>
+                <div class="card-body">
+                    <div class="search-container">
+                        <input type="text" class="form-control form-control-lg" id="phone_name" name="phone_name" 
+                               placeholder="Start typing a phone name..." 
+                               required value="{{ phone_name_query if phone_name_query }}" autocomplete="off">
+                        <div id="autocomplete-suggestions" class="autocomplete-suggestions"></div>
+                    </div>
+                </div>
+            </div>
+
+            {% if selected_phone %}
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card shadow-sm border-dark">
+                        <div class="card-header bg-dark text-white">
+                            <h4 class="mb-0">Selected Phone: {{ selected_phone.Product }}</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% for feat in feature_list %}{% if feat not in ["Brand_encoded"] %}
+                                <div class="col-lg-3 col-md-4 col-sm-6 feature-item">
+                                    <span class="feature-label">{{ feat.replace('_', ' ').title() }}:</span> 
+                                    <strong>{{ selected_phone.get(feat) or 'N/A' }}</strong>
+                                </div>
+                                {% endif %}{% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-12"><h3 class="mb-4">Recommended Alternatives</h3></div>
+
+                {% if recommendations %}
+                    {% for dist, info in recommendations %}
+                    <div class="col-lg-6 col-md-12 mb-4">
+                        <div class="card card-recommendation h-100 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-primary">{{ loop.index + (page - 1) * 20 }}. {{ info.Product }} ({{ info.Brand }})</h5>
+                                <p class="card-subtitle mb-2 text-muted">Distance: {{ "%.4f"|format(dist) }}</p>
+                                <div class="row">
+                                    {% for feat in feature_list %}{% if feat not in ["Brand_encoded"] %}
+                                    <div class="col-lg-6 col-md-6 col-sm-12 feature-item">
+                                        <span class="feature-label">{{ feat.replace('_', ' ').title() }}:</span> 
+                                        <strong>{{ info.get(feat) or 'N/A' }}</strong>
+                                    </div>
+                                    {% endif %}{% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="col-12"><div class="alert alert-info">No recommendations found matching the criteria.</div></div>
+                {% endif %}
+            </div>
+
+            {% if total_pages and total_pages > 1 %}
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                        {% set prev_params = query_params.copy() %}{% set _ = prev_params.update({'page': page - 1}) %}
+                        <a class="page-link" href="?{{ urlencode(prev_params) }}">Previous</a>
+                    </li>
+                    
+                    {% set window = 2 %}
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == 1 or p == total_pages or (p >= page - window and p <= page + window) %}
+                            {% if loop.previtem is defined and p > loop.previtem + 1 %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                {% set page_params = query_params.copy() %}{% set _ = page_params.update({'page': p}) %}
+                                <a class="page-link" href="?{{ urlencode(page_params) }}">{{ p }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                        {% set next_params = query_params.copy() %}{% set _ = next_params.update({'page': page + 1}) %}
+                        <a class="page-link" href="?{{ urlencode(next_params) }}">Next</a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% endif %}
+        </main>
+    </div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('phone_name');
+        const suggestionsContainer = document.getElementById('autocomplete-suggestions');
+        const searchForm = document.getElementById('search-form');
+        searchInput.addEventListener('input', function() {
+            const query = this.value;
+            if (query.length < 2) {
+                suggestionsContainer.innerHTML = '';
+                suggestionsContainer.style.display = 'none';
+                return;
+            }
+            fetch(`/api/search_phones?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    suggestionsContainer.innerHTML = '';
+                    if (data.length > 0) {
+                        data.forEach(suggestion => {
+                            const suggestionEl = document.createElement('div');
+                            suggestionEl.textContent = suggestion;
+                            suggestionEl.classList.add('autocomplete-suggestion');
+                            suggestionEl.addEventListener('click', function() {
+                                searchInput.value = this.textContent;
+                                suggestionsContainer.style.display = 'none';
+                                searchForm.submit();
+                            });
+                            suggestionsContainer.appendChild(suggestionEl);
+                        });
+                        suggestionsContainer.style.display = 'block';
+                    } else {
+                        suggestionsContainer.style.display = 'none';
+                    }
+                });
+        });
+        document.addEventListener('click', function(e) {
+            if (e.target !== searchInput) {
+                suggestionsContainer.style.display = 'none';
+            }
+        });
+    });
+</script>
+
+{% endblock %}
